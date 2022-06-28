@@ -9,6 +9,7 @@ import Control.Algebra
 import Control.Carrier.Random.Gen (Random, runRandom, uniformR)
 import Control.Carrier.State.Strict
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.IORef
@@ -35,7 +36,7 @@ t1 ::
   ( Has (State PeerState :+: Random) sig m,
     MonadIO m
   ) =>
-  IORef Int ->
+  TVar Int ->
   m ()
 t1 counter = forever $ do
   gets nodeRole >>= \case
@@ -60,7 +61,7 @@ t1 counter = forever $ do
       case sv of
         ChangeMaster mvar -> do
           modify (\pp -> pp {nodeRole = Master})
-          liftIO $ atomicModifyIORef' counter (\(!x) -> (x + 1, ()))
+          liftIO $ atomically $ modifyTVar' counter (+ 1)
           liftIO $ putMVar mvar ()
         GetInt mvar -> do
           i <- uniformR (1, 100000)
@@ -68,7 +69,7 @@ t1 counter = forever $ do
 
 r :: IO ()
 r = do
-  counterRef <- newIORef 0
+  counterRef <- newTVarIO 0
   nodes <- forM [1 .. 4] $ \i -> do
     tq <- newChan
     pure (NodeID i, tq)
@@ -85,6 +86,6 @@ r = do
 
   forever $ do
     threadDelay 1000000
-    counter <- readIORef counterRef
-    atomicModifyIORef' counterRef (const (0, ()))
+    counter <- readTVarIO counterRef
+    atomically $ modifyTVar' counterRef (const 0)
     print counter
